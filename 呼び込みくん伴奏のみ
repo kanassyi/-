@@ -1,0 +1,135 @@
+import numpy as np
+import sounddevice as sd
+
+fs = 44100  # サンプリングレート
+
+def square_wave(frequency, duration, duty=0.5, fs=44100):
+    """矩形波のduty比を指定して返す（Hz,ms）"""
+    t = np.linspace(0, duration/1000, int(fs*duration/1000), endpoint=False)
+    saw = (t * frequency) % 1.0
+    wave = 0.5 * np.where(saw < duty, 1.0, -1.0)
+    return wave
+
+def rest(dur_ms):
+    """休符（無音）を dur_ms ミリ秒分作る"""
+    n = int(round(fs * dur_ms / 1000))
+    return np.zeros(n)
+
+
+# 音階（Dメジャーに必要な音を登録）
+notes = { 
+    "D2":146,
+    "G2": 196,
+    "A2": 220,
+    "B2": 247,
+    "C#3":277,
+    "D3": 587,
+    "E3": 659,
+    "F#3": 740,
+    "G3": 784,
+    "A3": 880,
+    "B3": 988,
+}
+
+# BPM設定
+BPM = 120
+quarter_note_ms = 60000 / BPM  # 4分音符/ms = 60000ms/BPM
+
+# 音価を文字で表現（BPM連動）
+durations = {
+    "shi": quarter_note_ms,       # 4分音符
+    "ha": quarter_note_ms / 2,    # 8分音符
+    "ni": quarter_note_ms * 2,    # 2分音符
+    "zen": quarter_note_ms * 4,    # 全音符
+    "ju": quarter_note_ms / 4,    # 16分音符
+}
+
+# 音価計算関数（付点や三連符にも対応）
+def get_duration(note_val):
+    if note_val.endswith('.'):  # 付点
+        base = note_val[:-1]
+        return durations[base] * 1.5
+    elif note_val.endswith('3'): # 三連符
+        base = note_val[:-1]
+        return durations[base] / 3
+    else:
+        return durations[note_val]
+
+
+# 伴奏3声
+mezzo = [
+    ("REST", "ha"), ("F#3", "ha"), ("REST", "ha"),("F#3", "ha"),("REST", "ha"), ("F#3", "ha"), ("REST", "ha"),("F#3", "ha"),
+    ("REST", "ha"), ("F#3", "ha"), ("REST", "ha"),("F#3", "ha"),("REST", "ha"), ("F#3", "ha"), ("REST", "ha"),("F#3", "ha"),
+    ("REST", "ha"), ("F#3", "ha"), ("REST", "ha"),("F#3", "ha"),("REST", "ha"), ("F#3", "ha"), ("REST", "ha"),("F#3", "ha"),
+    ("REST", "ha"), ("F#3", "ha"), ("REST", "ha"),("F#3", "ha"),("REST", "ha"), ("F#3", "ha"), ("REST", "ha"),("F#3", "ha"),
+    ("REST", "ha"), ("D3", "ha"),("REST", "ha"), ("D3", "ha"),("REST", "ha"), ("D3", "ha"),("REST", "ha"), ("D3", "ha"),
+    ("REST", "ha"), ("D3", "ha"),("REST", "ha"), ("D3", "ha"),("REST", "ha"), ("D3", "ha"),("REST", "ha"), ("D3", "ha"),
+    ("REST", "ha"), ("E3", "ha"),("REST", "ha"), ("E3", "ha"),("REST", "ha"), ("E3", "ha"),("REST", "ha"), ("E3", "ha"),
+    ("REST", "ha"), ("E3", "ha"),("REST", "ha"), ("E3", "ha"),("REST", "ha"), ("E3", "ju"),("E3", "ju"),("REST", "ha"), ("E3", "ha"),
+    ("REST", "ha"), ("F#3", "ha"), ("REST", "ha"),("F#3", "ha"),("REST", "ha"), ("F#3", "ha"), ("REST", "ha"),("F#3", "ha"),
+    ("REST", "ha"), ("F#3", "ha"), ("REST", "ha"),("F#3", "ha"),("REST", "ha"), ("F#3", "ha"), ("REST", "ha"),("F#3", "ha"),
+    ("F#3", "zen")
+    ]
+
+alto = [
+    ("REST", "ha"), ("D3", "ha"), ("REST", "ha"),("D3", "ha"),("REST", "ha"), ("D3", "ha"), ("REST", "ha"),("D3", "ha"),
+    ("REST", "ha"), ("D3", "ha"), ("REST", "ha"),("D3", "ha"),("REST", "ha"), ("D3", "ha"), ("REST", "ha"),("D3", "ha"),
+    ("REST", "ha"), ("D3", "ha"),("REST", "ha"), ("D3", "ha"),("REST", "ha"), ("D3", "ha"),("REST", "ha"), ("D3", "ha"),
+    ("REST", "ha"), ("D3", "ha"),("REST", "ha"), ("D3", "ha"),("REST", "ha"), ("D3", "ha"),("REST", "ha"), ("D3", "ha"),
+    ("REST", "ha"), ("B2", "ha"),("REST", "ha"), ("B2", "ha"),("REST", "ha"), ("B2", "ha"),("REST", "ha"), ("B2", "ha"),
+    ("REST", "ha"), ("B2", "ha"),("REST", "ha"), ("B2", "ha"),("REST", "ha"), ("B2", "ha"),("REST", "ha"), ("B2", "ha"),
+    ("REST", "ha"), ("C#3", "ha"),("REST", "ha"), ("C#3", "ha"),("REST", "ha"), ("C#3", "ha"),("REST", "ha"), ("C#3", "ha"),
+    ("REST", "ha"), ("C#3", "ha"),("REST", "ha"), ("C#3", "ha"),("REST", "ha"), ("C#3", "ju"),("C#3", "ju"),("REST", "ha"), ("C#3", "ha"),
+    ("REST", "ha"), ("D3", "ha"), ("REST", "ha"),("D3", "ha"),("REST", "ha"), ("D3", "ha"), ("REST", "ha"),("D3", "ha"),
+    ("REST", "ha"), ("D3", "ha"), ("REST", "ha"),("D3", "ha"),("REST", "ha"), ("D3", "ha"), ("REST", "ha"),("D3", "ha"),
+    ("D3", "zen")
+]
+
+tenor = [
+    ("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),
+    ("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),
+    ("REST", "ha"), ("B2", "ha"),("REST", "ha"), ("B2", "ha"),("REST", "ha"), ("B2", "ha"),("REST", "ha"), ("B2", "ha"),
+    ("REST", "ha"), ("B2", "ha"),("REST", "ha"), ("B2", "ha"),("REST", "ha"), ("B2", "ha"),("REST", "ha"), ("B2", "ha"),
+    ("REST", "ha"), ("G2", "ha"),("REST", "ha"), ("G2", "ha"),("REST", "ha"), ("G2", "ha"),("REST", "ha"), ("G2", "ha"),
+    ("REST", "ha"), ("G2", "ha"),("REST", "ha"), ("G2", "ha"),("REST", "ha"), ("G2", "ha"),("REST", "ha"), ("G2", "ha"),
+    ("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),
+    ("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ju"),("A2", "ju"),("REST", "ha"), ("A2", "ha"),
+    ("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),
+    ("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),("REST", "ha"), ("A2", "ha"),
+    ("A2", "zen")
+]
+
+# 最後に挿入する休符（音の切れ目用）
+cut_rest = 10  # ms
+
+# mezzoの波形
+voice1 = np.concatenate([
+    rest(get_duration(d) + cut_rest) if n == "REST" else np.concatenate([square_wave(notes[n], get_duration(d), duty=0.25),
+    rest(cut_rest)
+    ])
+    for n, d in mezzo
+])
+
+# altoの波形
+voice2 = np.concatenate([
+    rest(get_duration(d) + cut_rest) if n == "REST" else np.concatenate([square_wave(notes[n], get_duration(d), duty=0.25),
+    rest(cut_rest)
+    ])
+    for n, d in alto
+])
+
+# tenorの波形
+voice3 = np.concatenate([
+    rest(get_duration(d) + cut_rest) if n == "REST" else np.concatenate([square_wave(notes[n], get_duration(d), duty=0.25),
+    rest(cut_rest)
+    ])
+    for n, d in tenor
+])
+
+
+# 3つを重ねる（音量を下げてクリップ防止）
+chord = (voice1 + voice2 +voice3) / 3.0
+
+# 再生
+sd.play(chord, fs)
+sd.wait()
