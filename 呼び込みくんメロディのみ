@@ -1,0 +1,92 @@
+import numpy as np
+import sounddevice as sd
+
+fs = 44100  # サンプリングレート
+
+def square_wave(frequency, duration, duty=0.5, fs=44100):
+    """矩形波のduty比を指定して返す（Hz,ms）"""
+    t = np.linspace(0, duration/1000, int(fs*duration/1000), endpoint=False)
+    saw = (t * frequency) % 1.0
+    wave = 0.5 * np.where(saw < duty, 1.0, -1.0)
+    return wave
+
+def rest(dur_ms):
+    """休符（無音）を dur_ms ミリ秒分作る"""
+    n = int(round(fs * dur_ms / 1000))
+    return np.zeros(n)
+
+
+# 音階（Dメジャーに必要な音を登録）
+notes = {
+    "D5": 587,
+    "E5": 659,
+    "F#5": 740,
+    "G5": 784,
+    "A5": 880,
+    "B5": 988,
+}
+
+# BPM設定
+BPM = 120
+quarter_note_ms = 60000 / BPM  # 4分音符/ms = 60000ms/BPM
+
+# 音価を文字で表現（BPM連動）
+durations = {
+    "shi": quarter_note_ms,       # 4分音符
+    "ha": quarter_note_ms / 2,    # 8分音符
+    "ni": quarter_note_ms * 2,    # 2分音符
+    "zen": quarter_note_ms * 4,    # 全音符
+}
+
+# 音価計算関数（付点や三連符にも対応）
+def get_duration(note_val):
+    if note_val.endswith('.'):  # 付点
+        base = note_val[:-1]
+        return durations[base] * 1.5
+    elif note_val.endswith('3'): # 三連符
+        base = note_val[:-1]
+        return durations[base] / 3
+    else:
+        return durations[note_val]
+
+
+# よびこみくん
+melody = [
+    ("A5", "ha"), ("A5", "shi"), ("B5", "ha"), ("A5", "ha"), ("F#5", "ha"), ("A5", "ha"),("REST", "ha"),
+    ("A5", "ha"), ("A5", "shi"), ("B5", "ha"), ("A5", "ha"), ("F#5", "ha"), ("A5", "ha"),("REST", "ha"),
+    ("D5", "ha"), ("D5", "ha"), ("D5", "ha"), ("E5", "ha"), ("F#5", "shi."), ("D5", "ha"),
+    ("F#5", "shi."), ("A5", "ha"),("A5", "ni"),
+    ("D5", "ha"), ("D5", "ha"), ("D5", "ha"), ("E5", "ha"), ("F#5", "shi."),("REST", "ha"),
+    ("D5", "ha"), ("D5", "ha"), ("D5", "ha"), ("E5", "ha"), ("F#5", "shi."),("REST", "ha"),
+    ("E5", "ha"), ("E5", "ha"), ("E5", "ha"), ("D5", "ha"), ("E5", "shi"), ("F#5", "shi"),
+    ("A5", "shi"), ("G5", "shi"), ("F#5", "shi"),("E5", "shi"),  
+    ("A5", "ha"), ("A5", "shi"), ("B5", "ha"), ("A5", "ha"), ("F#5", "ha"), ("A5", "ha"),("REST", "ha"),
+    ("A5", "ha"), ("A5", "shi"), ("B5", "ha"), ("A5", "ha"), ("F#5", "ha"), ("E5", "ha"),("REST", "ha"),
+    ("D5", "zen")
+]
+
+# 最後に挿入する休符（音の切れ目用）
+cut_rest = 10  # ms
+
+# duty=0.25 の波形
+line1 = np.concatenate([
+    rest(get_duration(d) + cut_rest) if n == "REST" else np.concatenate([square_wave(notes[n], get_duration(d), duty=0.25),
+    rest(cut_rest)
+    ])
+    for n, d in melody
+])
+
+# duty=0.75 の波形
+line2 = np.concatenate([
+    rest(get_duration(d) + cut_rest) if n == "REST" else np.concatenate([square_wave(notes[n], get_duration(d), duty=0.75),
+    rest(cut_rest)
+    ])
+    for n, d in melody
+])
+
+# メロディ2声を重ねる（音量を下げてクリップ防止）
+song = (line1 + line2) / 2.0
+
+# 再生
+sd.play(song, fs)
+sd.wait()
